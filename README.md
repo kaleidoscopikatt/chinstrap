@@ -1,8 +1,7 @@
 <img width="830" height="218" alt="chinstrap banner" src="https://github.com/user-attachments/assets/352fd069-f16d-47ba-a240-e8da821b40ae" />
 
-
 ---
-Chinstrap is a lightweight, human-readable shader language designed specifically for direct integration with Unity and a C#/Rust-friendly syntax. It is purpose-built for ease of use and maintainability, without the verbosity of traditional HLSL, which it compiles directly into. The compiler for Chinstrap is written in Lua and Rust.
+Chinstrap is a lightweight, human-readable shader language designed specifically for direct integration with Unity and a C#/Rust-friendly syntax. It is purpose-built for ease of use and maintainability, without the verbosity of traditional HLSL, which it compiles directly into. The compiler for Chinstrap is written in Rust, with Lua acting as the parser.
 
 ## Features
 * **Friendly syntax**: Type non-specific function & variable declarations (fn), readable indenting (moving away from HLSL boilerplate), Unity-like types (`Vector3`/`float3`, `Vector4`/`float4`/`Color`, `Array`/`RWStructuredBuffer<T>`).
@@ -30,11 +29,18 @@ fn frag(Vector2 uv) {
 ```
 
 ## TODO
+
+**Current Task:** Compilation - _Generic Denotions_<br>
+**Description:** Making sure that things such as `n = "hi"`, `n:append()` could work the same as `"hi":append()` - making `"hi"` and `n` be identified the same in compilation.
+
+**‣ May possibly extend out into Compilation - _Expressions_**
+
 | **Task** | **Completed** |
 | :------- | :-----------: |
 | **Lexer** | ✅ |
 | _Single-token_ Parsing | ✅ |
-| _Lookahead(1)_ Parsing | ❌ |
+| _Lookahead(1)_ Parsing | ✅ |
+| Compilation - _Generic Denotions_ | ❌ |
 | Compilation - _Expressions_ | ❌ |
 | Compilation - _Assign_ | ❌ |
 | Compilation - _Arrays_ | ❌ |
@@ -43,3 +49,49 @@ fn frag(Vector2 uv) {
 | **Tests** | ❌ |
 | Compilation for Compute Shaders | ❌ |
 | **Full Release** | ❌ |
+
+## Error List
+
+| **Error Code** | Meaning |
+| :------------: | :------ |
+| E000 |  Unknown Error |
+| E001 |  Unexpected Token |
+| E002 |  Unexpected EOF |
+| E003 |  Invalid Character |
+| E004 |  Invalid Identifier |
+| E005 |  Invalid Literal |
+| E006 |  Invalid Type |
+| E007 |  Type Mismatch |
+| E008 |  Missing Semicolon |
+| E009 |  Missing Colon |
+| E010 |  Missing Comma |
+| E011 |  Missing BraceOpen |
+| E012 |  Missing BraceClose |
+| E013 |  Missing ParenOpen |
+| E014 |  Missing ParenClose |
+| E015 |  Missing BracketOpen |
+| E016 |  Missing BracketClose |
+| E017 |  Duplicate Definition |
+| E018 |  Undefined Symbol |
+| E019 |  Undefined Property |
+| E020 |  Undefined Uniform |
+| E021 |  Invalid Decorator |
+| E022 |  Invalid Assignment |
+| E023 |  Illegal Operation |
+| E024 |  Out Of Range |
+| E025 |  Not Callable |
+| E026 |  Not Indexable |
+| E027 |  Not Assignable |
+| E028 |  Unexpected Keyword |
+| E029 |  Forbidden Keyword |
+| E030 |  Invalid Function Call |
+| E031 |  Wrong Parameter Count |
+| E032 |  Wrong Parameter Type |
+| E033 |  Invalid TableSyntax |
+| E034 |  Invalid PropertySyntax |
+| E035 |  Invalid UniformSyntax |
+| E036 |  Missing Return |
+| E037 |  Invalid Return Type |
+| E038 |  Internal Compiler Error |
+| E039 |  IO Failure |
+| E040 |  Preprocess Failure |

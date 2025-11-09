@@ -4,55 +4,8 @@
        compiler.
 ]]--
 
-local enum_TokenTypes = {
-    "Keyword",
-    "Identifier",
-    "Operator",
-    "LiteralString",
-    "LiteralNumber",
-    "Seperator",
-    "Comment",
-    "Whitespace",
-    "Unknown",
-}
-
-local seperators = { ';',
-                     '(',
-                     ')',
-                     '{',
-                     '}',
-                     ',', -- SPECIAL USECASE
-                     '"', -- SPECIAL USECASE
-                     ":", -- SPECIAL USECASE
-                    }
-local operators = {
-    '+', '-', '/', '*', '^', '%', '=', '!', '>', '<'
-}
-local keywords = {
-    "if", "while", "return", "continue", "else", "elseif", "fn", "@property", "@uniform"
-}
-
-enum_TokenTypes["Enum"] = function(name)
-    for index, value in ipairs(enum_TokenTypes) do
-        if index ~= "Enum" then
-            if value == name then
-                return index-1
-            end
-        end
-    end
-
-    return -1
-end
-
-function tableFind(t, v)
-    for _, tV in ipairs(t) do
-        if v == tV then
-            return true
-        end
-    end
-
-    return false
-end
+local globals = require("globals")
+local out = require("pretty")
 
 function RetrieveTokens(lines)
     local tokenList = {}
@@ -60,15 +13,15 @@ function RetrieveTokens(lines)
     local function finalizeToken(token)
         if token.contents ~= "" then
             -- Match for keywords...
-            if token.type == enum_TokenTypes.Enum("Identifier") and tableFind(keywords, token.contents) then
-                token.type = enum_TokenTypes.Enum("Keyword")
+            if token.type == globals.enum_TokenTypes.Enum("Identifier") and globals.tableFind(keywords, token.contents) then
+                token.type = globals.enum_TokenTypes.Enum("Keyword")
             end
             table.insert(tokenList, token)
         end
     end
 
     local function newToken(contents, tokenType)
-        return { contents = contents or "", type = tokenType or enum_TokenTypes.Enum("Unknown") }
+        return { contents = contents or "", type = tokenType or globals.enum_TokenTypes.Enum("Unknown") }
     end
 
     local inString = false
@@ -91,13 +44,12 @@ function RetrieveTokens(lines)
                     inString = false
                     currentQuote = nil
                 end
-
             else
                 -- Not inside a string
                 if char == '"' or char == "'" then
                     -- Beginning of a string literal
                     finalizeToken(currentToken)
-                    currentToken = newToken(char, enum_TokenTypes.Enum("LiteralString"))
+                    currentToken = newToken(char, globals.enum_TokenTypes.Enum("LiteralString"))
                     inString = true
                     currentQuote = char
                 elseif isWhitespace then
@@ -106,7 +58,7 @@ function RetrieveTokens(lines)
                     currentToken = newToken()
                 else
                     -- Check for seperators...
-                    if tableFind(seperators, char) then
+                    if globals.tableFind(globals.seperators, char) then
                         -- Pop the token currently being written.
                         finalizeToken(currentToken)
                         currentToken = newToken()
@@ -115,13 +67,13 @@ function RetrieveTokens(lines)
                         -- Parser should then process all from the previous seperator...
                         currentToken = {
                             contents = char,
-                            type = enum_TokenTypes.Enum("Seperator")
+                            type = globals.enum_TokenTypes.Enum("Seperator")
                         }
 
                         -- Pop the seperator token.
                         finalizeToken(currentToken)
                         currentToken = newToken()
-                    elseif tableFind(operators, char) then
+                    elseif globals.tableFind(globals.operators, char) then
                         -- Check for operators...
                         finalizeToken(currentToken)
                         currentToken = newToken()
@@ -129,7 +81,7 @@ function RetrieveTokens(lines)
                         -- Pop the token currently being written
                         currentToken = {
                             contents = char,
-                            type = enum_TokenTypes.Enum("Operator")
+                            type = globals.enum_TokenTypes.Enum("Operator")
                         }
 
                         -- Pop the operator token.
@@ -137,7 +89,7 @@ function RetrieveTokens(lines)
                         currentToken = newToken()
                     elseif tonumber(char) ~= nil then 
                         -- Build a number literal token.
-                        currentToken.type = enum_TokenTypes.Enum("LiteralNumber")
+                        currentToken.type = globals.enum_TokenTypes.Enum("LiteralNumber")
                         currentToken.contents = currentToken.contents .. char
                     elseif char == '$' then
                         -- Start of a comment. Pop current token.
@@ -145,7 +97,7 @@ function RetrieveTokens(lines)
 
                         -- Capture everything until end of line as comment contents
                         local commentText = line:sub(i)
-                        currentToken = newToken(commentText, enum_TokenTypes.Enum("Comment"))
+                        currentToken = newToken(commentText, globals.enum_TokenTypes.Enum("Comment"))
                         finalizeToken(currentToken)
 
                         -- Move to end of line
@@ -153,9 +105,9 @@ function RetrieveTokens(lines)
                         break
                     else
                         -- Assume it's an identifier.
-                        if currentToken.type ~= enum_TokenTypes.Enum("Identifier")
-                            and currentToken.type ~= enum_TokenTypes.Enum("Keyword") then
-                            currentToken.type = enum_TokenTypes.Enum("Identifier")
+                        if currentToken.type ~= globals.enum_TokenTypes.Enum("Identifier")
+                            and currentToken.type ~= globals.enum_TokenTypes.Enum("Keyword") then
+                            currentToken.type = globals.enum_TokenTypes.Enum("Identifier")
                         end
 
                         currentToken.contents = currentToken.contents .. char
@@ -165,7 +117,7 @@ function RetrieveTokens(lines)
         end
 
         finalizeToken(currentToken)
-        currentToken = newToken("\n", enum_TokenTypes.Enum("Whitespace"))
+        currentToken = newToken("\n", globals.enum_TokenTypes.Enum("Whitespace"))
         nowInComment = false
         finalizeToken(currentToken)
     end
@@ -187,7 +139,7 @@ function RetrieveTokens(lines)
                 currentBind = currentBind .. '"'
                 tokenList[startIndex] = {
                     contents = currentBind,
-                    type = enum_TokenTypes.Enum("LiteralString")
+                    type = globals.enum_TokenTypes.Enum("LiteralString")
                 }
 
                 for j = i, startIndex + 1, -1 do
@@ -210,25 +162,6 @@ function RetrieveTokens(lines)
     return tokenList
 end
 
-function tableToString(tbl, indent)
-    indent = indent or 0
-    local toprint = string.rep(" ", indent) .. "{\n"
-    indent = indent + 2
-    for k, v in pairs(tbl) do
-        toprint = toprint .. string.rep(" ", indent)
-        if type(k) == "number" then
-            toprint = toprint .. "[" .. k .. "] = "
-        elseif type(k) == "string" then
-            toprint = toprint .. k .. " = "
-        end
-        if type(v) == "table" then
-            toprint = toprint .. tableToString(v, indent + 2) .. ",\n"
-        elseif type(v) == "string" then
-            toprint = toprint .. '"' .. v .. '",\n'
-        else
-            toprint = toprint .. tostring(v) .. ",\n"
-        end
-    end
-    toprint = toprint .. string.rep(" ", indent - 2) .. "}"
-    return toprint
-end
+-- print(globals.tableToString(RetrieveTokens({
+--     '@property("_MainTex", 2D);'
+-- })))

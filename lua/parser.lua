@@ -4,31 +4,8 @@
 processes them into an Abstract Syntax Tree.
 ]]--
 
-local cursor_mt = {
-	__add = function(a, b)
-		if type(a) == "table" and type(b) == "number" then
-			local nextId = a.id + b
-			if nextId <= #a.source then a.id = nextId end
-		end
-		return a
-	end,
-	
-	__eq = function(a, b)
-		if type(a) == "table" and type(b) == "number" then
-			return a.id == b
-		end
-		
-		return false
-	end,
-	
-	__sub = function(a, b)
-		if type(a) == "table" and type(b) == "number" then
-			local prevId = a.id - b
-			if prevId <= #a.source then a.id = prevId end
-		end
-		return a
-	end
-}
+local globals = require("globals")
+local out = require("pretty")
 
 local Cursor = {
 	new = function(source)
@@ -36,55 +13,44 @@ local Cursor = {
 			id = 1,
 			source = source,
 			
-			progressCursor = function(self)
-				local nextId = self.id + 1
-				if nextId <= #self.source then self.id = nextId return true end
+			read = function(self, lookahead)
+				if (not lookAhead) then lookahead = 0 end
+				if (self.id + lookahead) <= #self.source then return self.source[(self.id + lookahead)] end
+			end,
+			
+			setId = function(self, n)
+				if n <= #self.source then
+					self.id = n
+					out.constant_tok = n
+					return true
+				end
 				return false
+			end,
+			
+			progressCursor = function(self)
+				return self:setId(self.id + 1)
 			end,
 			
 			regressCursor = function(self)
-				local prevId = self.id - 1
-				if prevId <= #self.source then self.id = prevId return true end
-				return false
+				return self:setId(self.id - 1)
 			end,
 			
-			read = function(self, line)
-				if not line then line = self.id end
-				if line <= #self.source then self:progressCursor() return self.source[line] end
-				return nil
+			eat = function(self)
+				local contents = self:read()
+				self:progressCursor()
+				
+				return contents
 			end,
 			
-			testToken = function(self, value)
-				local token = self:read()
-				if token == nil then return false end
-				if type(token) ~= "table" then return false end
-				if token["contents"] == nil then return false end
-				if token["type"] == nil then return false end
-				return token.contents == value
+			expect = function(self, t)
+				local contents = self:read().contents
+				return contents == t, contents
 			end,
-
-			expectUntilComma = function(self)
-				local tokens = {}
-				local token = self:read()
-
-				while token.contents ~= "," and token.contents ~= ";" do
-					table.insert(tokens, token)
-					token = self:read()
-				end
-
-				return tokens, self.id
-			end,
-
-			expectUntil = function(self, char)
-				local tokens = {}
-				local token = self:read()
-
-				while token.contents ~= char and token.contents ~= ";" do
-					table.insert(tokens, token)
-					token = self:read()
-				end
-
-				return tokens, self.id
+			
+			test = function(self, t)
+				local condition, whatIsItThen = self:expect(t)
+				self:progressCursor()
+				return condition, whatIsItThen
 			end,
 			
 			liquidate = function(self)
@@ -97,60 +63,45 @@ local Cursor = {
 			end
 		}
 		
-		setmetatable(newCursor, cursor_mt)
+		setmetatable(newCursor, {
+			__add = function(a, b)
+				if type(a) == "table" and type(b) == "number" then
+					local nextId = a.id + b
+					if nextId <= #a.source then a.id = nextId end
+				end
+				return a
+			end,
+			
+			__eq = function(a, b)
+				if type(a) == "table" and type(b) == "number" then
+					return a.id == b
+				end
+				
+				return false
+			end,
+			
+			__sub = function(a, b)
+				if type(a) == "table" and type(b) == "number" then
+					local prevId = a.id - b
+					if prevId <= #a.source then a.id = prevId end
+				end
+				return a
+			end
+		})
 		return newCursor
 	end
 }
 
 local quickMaths = { "sin", "max", "sample", "pi", "cos", "tan", "sinh", "cosh", "tanh", "dot" }
 
-function tableFind(t, v)
-	for _, tV in ipairs(t) do
-		if v == tV then
-			return true
-		end
-	end
-	
-	return false
-end
-
-function tableToString(tbl, indent)
-	indent = indent or 0
-	local toprint = string.rep(" ", indent) .. "{\n"
-	indent = indent + 2
-	for k, v in pairs(tbl) do
-		toprint = toprint .. string.rep(" ", indent)
-		if type(k) == "number" then
-			toprint = toprint .. "[" .. k .. "] = "
-		elseif type(k) == "string" then
-			toprint = toprint .. k .. " = "
-		end
-		if type(v) == "table" then
-			toprint = toprint .. tableToString(v, indent + 2) .. ",\n"
-		elseif type(v) == "string" then
-			toprint = toprint .. '"' .. v .. '",\n'
-		else
-			toprint = toprint .. tostring(v) .. ",\n"
-		end
-	end
-	toprint = toprint .. string.rep(" ", indent - 2) .. "}"
-	return toprint
-end
-
 function Node(class, ...)
-	local node = {
+	local node = globals.druggedTable({
 		class = class or "Root",
 		children = { ... },
 
 		push = function(self, child)
 			table.insert(self.children, child)
 		end,
-	}
-	
-	setmetatable(node, {
-		__tostring = function(v)
-			return tableToString(v)
-		end
 	})
 
 	return node
@@ -170,24 +121,38 @@ function IReader(t)
 	end
 end
 
+function TokenReader(cursor)
+	local i = cursor.id - 1
+
+	return function()
+		i = i + 1
+		cursor:setId(i)
+		return i, cursor:read()
+	end
+end
+
 function Is(object, value)
 	return object.contents == value
 end
 
 function RPNtoAST(tokens)
-	--print("RPN:", tableToString(tokens))
+	--print("RPN:", globals.tableToString(tokens))
 	local stack = {}
 
-	for _, token in ipairs(tokens) do
+	for i, token in ipairs(tokens) do
 		local t = token.contents or token
-
+		--print(i, token.contents, token.type)
+		
 		if tonumber(t) then
+			--print("Pushing:", t)
 			table.insert(stack, Node("Number", token))
 		elseif t:match("^[%a_]+$") then -- RegEx sucks man
+			--print("Pushing:", t)
 			table.insert(stack, Node("Variable", token))
 		elseif t == "+" or t == "-" or t == "*" or t == "/" or t == "^" then
 			local right = table.remove(stack)
 			local left = table.remove(stack)
+
 			table.insert(stack, Node("Operator", token, left, right))
 		else
 			error("Error code 1: Unknown token [" .. tostring(t).. "]")
@@ -195,8 +160,8 @@ function RPNtoAST(tokens)
 	end
 
 	if #stack ~= 1 then
-		print("BAD RPN:", tableToString(tokens))
-		print("STACK:", tableToString(stack))
+		print("BAD RPN:", globals.tableToString(tokens))
+		print("STACK:", globals.tableToString(stack))
 	end
 	assert(#stack == 1, "Error code 2: Malformed RPN Expression")
 	return stack[1]
@@ -220,9 +185,10 @@ function ParseLogic(tokens)
 	
 	for index, token, lookAhead in IReader(tokens) do
 		local contents = token.contents
+
 		if tonumber(contents) ~= nil then
 			table.insert(outputStack, token)
-		elseif lookAhead(1) and lookAhead(1).contents == "(" then
+		elseif lookAhead(1) and lookAhead(1).contents == "(" and token.type == 1 then
 			table.insert(operatorStack, token)
 		elseif token.type == 2 then
 			local o2 = operatorStack[#operatorStack]
@@ -244,27 +210,29 @@ function ParseLogic(tokens)
 		elseif contents == ')' then
 			local o2 = operatorStack[#operatorStack]
 			while (o2 and o2.contents ~= "(") do
-				assert(#operatorStack ~= 0)
+				assert(#operatorStack ~= 0, "There are mismatched parentheses in the expression!")
 				table.remove(operatorStack, #operatorStack)
 				table.insert(outputStack, o2)
 				o2 = operatorStack[#operatorStack]
 			end
-			assert(o2.contents == '(')
+			assert(o2.contents == '(', "There are mismatched parentheses in the expression!")
 			table.remove(operatorStack, #operatorStack)
 			o2 = operatorStack[#operatorStack]
-			if (o2.contents ~= '(' and o2.contents ~= ')' and precedence[o2.contents] == nil) then
+			if (o2 and o2.type == 1) then
 				table.remove(operatorStack, #operatorStack)
 				table.insert(outputStack, o2)
 			end
 		elseif token.type == 1 then
 			table.insert(outputStack, token)
-		end 
-		::continue::
+		else
+			print("Token ".. globals.tableToString(token).. " couldn't be parsed to any type!")
+		end
+
 	end
-	
+
 	while #operatorStack > 0 do
 		local operator = operatorStack[#operatorStack]
-		assert(operator ~= "(")
+		assert(operator.contents ~= "(", "There are mismatched parentheses in the expression!")
 		table.remove(operatorStack, #operatorStack)
 		table.insert(outputStack, operator)
 	end
@@ -273,28 +241,38 @@ function ParseLogic(tokens)
 end
 
 function ParseNumber(cursor)
-	cursor:regressCursor()
+	local token = cursor:read()
+	--print(token.contents)
 
-	local startingId = cursor.id
-	local tokens, id = cursor:expectUntilComma()
+	local contents = {}
+	for i, tok in TokenReader(cursor) do
+		if tok.contents == ';' then
+			break
+		end
 
-	local rpnStack = ParseLogic(tokens)
+		if (globals.tableFind({1, 2, 4, 5}, tok.type)) then
+			table.insert(contents, tok)
+		else
+			break
+		end
+	end
+
+	local rpnStack = ParseLogic(contents)
 	local ASTNode = RPNtoAST(rpnStack)
 
 	return ASTNode
 end
 
 function ParseIdentifier(cursor)
-	cursor:regressCursor()
 	local token = cursor:read()
 
-	if tableFind(quickMaths, token.contents) then
+	if globals.tableFind(quickMaths, token.contents) then
 		return ParseNumber(cursor)
-	elseif cursor:read() == "(" then
+	elseif cursor:read(1) == "(" then
 		-- It's a function!
-		return Node("FunctionCall", token, table.unpack(cursor:expectUntil(')')))
+		return Node("FunctionCall", token, "totallyRealParameters")
 	else
-		cursor:regressCursor()
+		print(tostring(tok.type).. " is not of quickMaths")
 		return Node("Identifier", token)
 	end
 
@@ -306,7 +284,7 @@ function ParseVariableType(cursor)
 	if token.type == 1 then -- Identifier
 		local parsed = ParseIdentifier(cursor)
 		if not parsed then
-			error("Error code 3: Identifier cannot be parsed!")
+			out.errorPrint("parser", 3, "Identifier cannot be parsed!")
 		end
 
 		return parsed
@@ -325,30 +303,85 @@ function ParseVariableType(cursor)
 			return Node("Table", token)
 		end
 	end
+
 	return false
 end
 
 function ParseAssignment(tokenList)
 	local cursor = Cursor.new(tokenList)
-	local lhs = cursor:read()
+	local lhs = cursor:eat()
 	if lhs.type ~= 1 then
 		return false
 	end
-	if not cursor:testToken("=") then
+	if not cursor:test("=") then
 		return false
 	end
 	local rhs_node = ParseVariableType(cursor)
 	if not rhs_node then
-		return false
+		out.errorPrint("parser", 22, "Expected object of any type, got ".. cursor:read().. "!")
+		return -1
 	end
-	if not cursor:testToken(";") then
-		return false
+	cursor:progressCursor()
+
+	if not cursor:expect(";") then
+		out.errorPrint("parser", 8, "Expected ';', got ".. cursor:read().. "!")
+		return -1
 	end
+	cursor:progressCursor()
+
 	local lhs_node = Node("Identifier", lhs)
-	return Node("Assign", lhs_node, rhs_node)
+	local node = Node("Assign", lhs_node, rhs_node)
+	return node
+end
+
+function ParseProperty(tokenList)
+	local cursor = Cursor.new(tokenList)
+	local firstCheck = cursor:test("@property")
+	if not firstCheck then
+		return false
+	end
+
+	local lBracketTest, lBracketGot = cursor:test("(")
+	if not lBracketTest then
+		out.errorPrint("parser", 15, "Expected '(', got '".. lBracketGot.. "'!")
+		return -1
+	end
+
+	local lhs = cursor:eat()
+
+	local commaTest, commaGot = cursor:test(",")
+	if not commaTest then
+		out.errorPrint("parser", 10, "Expected ',', got '".. commaGot.. "'!")
+		return -1
+	end
+	if lhs.type ~= 3 then
+		return -1
+	end
+
+	local rhs = cursor:eat()
+	if not rhs.type == 1 then
+		return -1
+	end
+	if not globals.tableFind({"2D", "3D"}, rhs.contents) then
+		out.errorPrint("parser", 6, "Expected '2D' or '3D', got '".. rhs.contents.. "'!")
+		return -1
+	end
+	local rBracketTest, rBracketGot = cursor:test(")")
+	if not rBracketTest then
+		out.errorPrint("parser", 16, "Expected ')', got '".. rBracketGot.. "'!")
+		return -1
+	end
+	local semiColonTest, semiColonGot = cursor:test(";")
+	if not semiColonTest then
+		out.errorPrint("parser", 8, "Expected ';', got '".. semiColonGot.. "'!")
+		return -1
+	end
+
+	return Node("Property", Node("String", lhs), Node("Identifier", rhs))
 end
 
 function ParseTokens(tokenList)
+	print("") -- cool break in printing
 	local motherStack = {}
 	local stack = {}
 	
@@ -361,15 +394,79 @@ function ParseTokens(tokenList)
 			end
 		end
 	end
-	
-	for i, line in ipairs(motherStack) do
-		local assignmentNode = ParseAssignment(line)
-		if (assignmentNode) then
-			motherStack[i] = assignmentNode
+
+	local function isValidNode(n)
+		if n ~= false then
+			if (n == -1) then
+				return false
+			end
+
+			return true
 		end
 	end
 
-	return motherStack
+	out.constant_line = 1
+	out.constant_tok = 1
 	
-	--print(tableToString(motherStack))
+	for i, line in ipairs(motherStack) do
+		local assignmentNode = ParseAssignment(line)
+		local propertyNode = ParseProperty(line)
+
+		local breakup = false -- Because goto didn't want to work, for whatever reason...
+
+		if isValidNode(assignmentNode) then
+			breakup = true
+			motherStack[i] = assignmentNode
+		end
+
+		if isValidNode(propertyNode) then
+			breakup = true
+			motherStack[i] = propertyNode
+		end
+
+		if (not breakup) then
+			out.errorPrint("parser", 27, "Statement is not assignable or declarable. This may be due to encountering a previous error.")
+			return {}
+		else
+			out.constant_line = out.constant_line + 1
+		end
+	end
+
+	print(out.colString("[PARSER]:", "blue").. " " .. out.colString("AST Generation Done!", "green_bg", "bold"))
+	return motherStack
 end
+
+-- print(globals.tableToString(ParseTokens({
+--   [1] =     {
+--       contents = "@property",
+--       type = 1,
+--     },
+--   [2] =     {
+--       contents = "(",
+--       type = 5,
+--     },
+--   [3] =     {
+--       contents = "\"_MainTex\"",
+--       type = 3,
+--     },
+--   [4] =     {
+--       contents = ",",
+--       type = 5,
+--     },
+--   [5] =     {
+--       contents = "2D",
+--       type = 1,
+--     },
+--   [6] =     {
+--       contents = ")",
+--       type = 5,
+--     },
+--   [7] =     {
+--       contents = ";",
+--       type = 5,
+--     },
+--   [8] =     {
+--       contents = "",
+--       type = 7,
+--     },
+-- })))

@@ -17,6 +17,7 @@ const GREEN: &str = "\x1b[32m";
 const YELLOW: &str = "\x1b[33m";
 const MAGENTA: &str = "\x1b[35m";
 
+/* !NOW OUTDATED! */
 /* If you want modifiable parsers, use load_lua_files */
 fn load_lua_files() -> (String, String) {
     let exe_path = std::env::current_exe().expect("Failed to get current exe path");
@@ -31,7 +32,7 @@ fn load_lua_files() -> (String, String) {
     let lexer = fs::read_to_string(lexer_path).expect("Failed to read tokenizer.lua");
     let parser = fs::read_to_string(parser_path).expect("Failed to read parser.lua");
 
-    (lexer, parser)
+    return (lexer, parser);
 }
 
 fn print_boxed_header(file: &str) -> usize {
@@ -98,25 +99,44 @@ pub fn passthru(token_list: Vec<String>) -> LuaResult<()> {
     //let (lexer, parser) = load_lua_files();
 
     /* include_str!() means the lua code gets compiled with the .exe! */
+    
+    // modules
+    let pretty = include_str!("../lua/pretty.lua");
+    let m_globals = include_str!("../lua/globals.lua");
+
+    // code
     let lexer = include_str!("../lua/tokenizer.lua");
     let parser = include_str!("../lua/parser.lua");
 
+    // loaded modules
+    let pretty_mod: Table = lua.load(pretty).eval()?;
+    let globals_mod: Table = lua.load(m_globals).eval()?;
+
+    // register modules
+    lua.register_module("pretty", pretty_mod)?;
+    lua.register_module("globals", globals_mod)?;
+
+    // execute code
     lua.load(lexer).exec().expect("Failed to execute tokenizer.lua");
     print_loaded("tokenizer.lua");
     
     lua.load(parser).exec().expect("Failed to execute parser.lua");
     print_loaded("parser.lua");
 
+    // setup function calls
     let globals = lua.globals();
 
+    // call functions
     let retrieve_tokens: LuaFunction = globals.get("RetrieveTokens")?;
     let lua_tokens: LuaValue = retrieve_tokens.call((token_list,))?;
 
     let parse_tokens: LuaFunction = globals.get("ParseTokens")?;
     let parse_result: LuaValue = parse_tokens.call((lua_tokens,))?;
 
+    // cool break
     println!("");
 
+    // display AST
     if let LuaValue::Table(table) = parse_result {
         let mut iter = table.sequence_values::<LuaValue>();
         let mut nodes = vec![];
@@ -130,5 +150,6 @@ pub fn passthru(token_list: Vec<String>) -> LuaResult<()> {
         }
     }
 
+    // i still hate this no-return method, but i'll probably maybe get used to it.
     Ok(())
 }
