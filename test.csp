@@ -3,4 +3,5 @@ sum = 10 + 10;
 sum = (10 + 10);
 sum = (10 + 10) * 12;
 
-$ myAwesomeFunction(sum);
+myvar = "Hello, World!";
+myvar = myAwesomeFunction("hi");

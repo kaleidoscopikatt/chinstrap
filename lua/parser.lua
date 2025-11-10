@@ -14,7 +14,7 @@ local Cursor = {
 			source = source,
 			
 			read = function(self, lookahead)
-				if (not lookAhead) then lookahead = 0 end
+				if (not lookahead) then lookahead = 0 end
 				if (self.id + lookahead) <= #self.source then return self.source[(self.id + lookahead)] end
 			end,
 			
@@ -126,8 +126,10 @@ function TokenReader(cursor)
 
 	return function()
 		i = i + 1
-		cursor:setId(i)
-		return i, cursor:read()
+		local result = cursor:setId(i)
+		if (result) then
+			return i, cursor:read()			
+		end
 	end
 end
 
@@ -210,12 +212,12 @@ function ParseLogic(tokens)
 		elseif contents == ')' then
 			local o2 = operatorStack[#operatorStack]
 			while (o2 and o2.contents ~= "(") do
-				assert(#operatorStack ~= 0, "There are mismatched parentheses in the expression!")
+				assert(out.assert(#operatorStack ~= 0, out.errorBlock("parser", 22, "There are mismatched parentheses in the expression! - (ln:tok) may be inacurrate!")))
 				table.remove(operatorStack, #operatorStack)
 				table.insert(outputStack, o2)
 				o2 = operatorStack[#operatorStack]
 			end
-			assert(o2.contents == '(', "There are mismatched parentheses in the expression!")
+			assert(out.assert(o2.contents == '(', out.errorBlock("parser", 22, "There are mismatched parentheses in the expression! - (ln:tok) may be inacurrate!")))
 			table.remove(operatorStack, #operatorStack)
 			o2 = operatorStack[#operatorStack]
 			if (o2 and o2.type == 1) then
@@ -225,14 +227,14 @@ function ParseLogic(tokens)
 		elseif token.type == 1 then
 			table.insert(outputStack, token)
 		else
-			print("Token ".. globals.tableToString(token).. " couldn't be parsed to any type!")
+			out.errorPrint(out.errorBlock("parser", 7, "Token ".. globals.tableToString(token).. " couldn't be identified in the expression!"))
+			return -1
 		end
-
 	end
 
 	while #operatorStack > 0 do
 		local operator = operatorStack[#operatorStack]
-		assert(operator.contents ~= "(", "There are mismatched parentheses in the expression!")
+		assert(out.assert(operator.contents ~= "(", out.errorBlock("parser", 22, "There are mismatched parentheses in the expression! - (ln:tok) may be inacurrate!")))
 		table.remove(operatorStack, #operatorStack)
 		table.insert(outputStack, operator)
 	end
@@ -244,9 +246,23 @@ function ParseNumber(cursor)
 	local token = cursor:read()
 	--print(token.contents)
 
-	local contents = {}
+	local contents = globals.druggedTable({})
+	local depth = 0
+	
 	for i, tok in TokenReader(cursor) do
 		if tok.contents == ';' then
+			break
+		end
+
+		if tok.contents == '(' then
+			depth = depth + 1
+		end
+
+		if tok.contents == ')' then
+			depth = depth - 1
+		end
+
+		if tok.contents == ',' and depth == 0 then
 			break
 		end
 
@@ -258,6 +274,11 @@ function ParseNumber(cursor)
 	end
 
 	local rpnStack = ParseLogic(contents)
+
+	if (rpnStack == -1) then
+		return -1
+	end
+
 	local ASTNode = RPNtoAST(rpnStack)
 
 	return ASTNode
@@ -270,9 +291,10 @@ function ParseIdentifier(cursor)
 		return ParseNumber(cursor)
 	elseif cursor:read(1) == "(" then
 		-- It's a function!
+		out.processPrint("parser", "Function found: ".. token)
 		return Node("FunctionCall", token, "totallyRealParameters")
 	else
-		print(tostring(tok.type).. " is not of quickMaths")
+		print(tostring(token.type).. " is not of quickMaths")
 		return Node("Identifier", token)
 	end
 
@@ -281,10 +303,12 @@ end
 
 function ParseVariableType(cursor)
 	local token = cursor:read()
+	out.processPrint("parser", "Attempting to identify object type of ".. token.contents.. "!")
+
 	if token.type == 1 then -- Identifier
 		local parsed = ParseIdentifier(cursor)
 		if not parsed then
-			out.errorPrint("parser", 3, "Identifier cannot be parsed!")
+			out.errorPrint(out.errorBlock("parser", 3, "Identifier cannot be parsed!"))
 		end
 
 		return parsed
@@ -318,13 +342,19 @@ function ParseAssignment(tokenList)
 	end
 	local rhs_node = ParseVariableType(cursor)
 	if not rhs_node then
-		out.errorPrint("parser", 22, "Expected object of any type, got ".. cursor:read().. "!")
+		out.errorPrint(out.errorBlock("parser", 22, "Expected object of any type, got ".. cursor:read().. "!"))
 		return -1
 	end
+
+	if rhs_node == -1 then
+		out.errorPrint(out.errorBlock("parser", 22, "Expected object of any type, but type failed to resolve itself"))
+		return -1
+	end
+
 	cursor:progressCursor()
 
 	if not cursor:expect(";") then
-		out.errorPrint("parser", 8, "Expected ';', got ".. cursor:read().. "!")
+		out.errorPrint(out.errorBlock("parser", 8, "Expected ';', got ".. cursor:read().. "!"))
 		return -1
 	end
 	cursor:progressCursor()
@@ -343,7 +373,7 @@ function ParseProperty(tokenList)
 
 	local lBracketTest, lBracketGot = cursor:test("(")
 	if not lBracketTest then
-		out.errorPrint("parser", 15, "Expected '(', got '".. lBracketGot.. "'!")
+		out.errorPrint(out.errorBlock("parser", 15, "Expected '(', got '".. lBracketGot.. "'!"))
 		return -1
 	end
 
@@ -351,7 +381,7 @@ function ParseProperty(tokenList)
 
 	local commaTest, commaGot = cursor:test(",")
 	if not commaTest then
-		out.errorPrint("parser", 10, "Expected ',', got '".. commaGot.. "'!")
+		out.errorPrint(out.errorBlock("parser", 10, "Expected ',', got '".. commaGot.. "'!"))
 		return -1
 	end
 	if lhs.type ~= 3 then
@@ -363,21 +393,60 @@ function ParseProperty(tokenList)
 		return -1
 	end
 	if not globals.tableFind({"2D", "3D"}, rhs.contents) then
-		out.errorPrint("parser", 6, "Expected '2D' or '3D', got '".. rhs.contents.. "'!")
+		out.errorPrint(out.errorBlock("parser", 6, "Expected '2D' or '3D', got '".. rhs.contents.. "'!"))
 		return -1
 	end
 	local rBracketTest, rBracketGot = cursor:test(")")
 	if not rBracketTest then
-		out.errorPrint("parser", 16, "Expected ')', got '".. rBracketGot.. "'!")
+		out.errorPrint(out.errorBlock("parser", 16, "Expected ')', got '".. rBracketGot.. "'!"))
 		return -1
 	end
 	local semiColonTest, semiColonGot = cursor:test(";")
 	if not semiColonTest then
-		out.errorPrint("parser", 8, "Expected ';', got '".. semiColonGot.. "'!")
+		out.errorPrint(out.errorBlock("parser", 8, "Expected ';', got '".. semiColonGot.. "'!"))
 		return -1
 	end
 
 	return Node("Property", Node("String", lhs), Node("Identifier", rhs))
+end
+
+function ParseFunctionCall(tokenList)
+	local cursor = Cursor.new(tokenList)
+
+	local functionName = cursor:eat()
+	if (functionName.type ~= 1) then
+		return false
+	end
+
+	local lBracketTest = cursor:test("(")
+	if not lBracketTest then
+		return false
+	end
+
+	-- From here, we assume 'identifier(' is trying to call a function.
+	local params = {}
+	for i, tok in TokenReader(cursor) do
+		if tok.contents ~= ',' then
+			if tok.contents == ')' then
+				break
+			end
+			table.insert(params, ParseVariableType(cursor))
+		end
+	end
+
+	local rBracketTest, rBracketGot = cursor:test(')')
+	if not rBracketTest then
+		out.errorPrint(out.errorBlock("parser", 16, "Expected ')', got '".. rBracketGot.. "'!"))
+		return -1
+	end
+
+	local semiColonTest, semiColonGot = cursor:test(";")
+	if not semiColonTest then
+		out.errorPrint(out.errorBlock("parser", 8, "Expected ';', got '".. semiColonGot.. "'!"))
+		return -1
+	end
+
+	return Node("FunctionCall", table.unpack(params))
 end
 
 function ParseTokens(tokenList)
@@ -411,6 +480,7 @@ function ParseTokens(tokenList)
 	for i, line in ipairs(motherStack) do
 		local assignmentNode = ParseAssignment(line)
 		local propertyNode = ParseProperty(line)
+		local callNode = ParseFunctionCall(line)
 
 		local breakup = false -- Because goto didn't want to work, for whatever reason...
 
@@ -424,8 +494,13 @@ function ParseTokens(tokenList)
 			motherStack[i] = propertyNode
 		end
 
+		if (isValidNode(callNode)) then
+			breakup = true
+			motherStack[i] = callNode
+		end
+
 		if (not breakup) then
-			out.errorPrint("parser", 27, "Statement is not assignable or declarable. This may be due to encountering a previous error.")
+			out.errorPrint(out.errorBlock("parser", 27, "Statement is not assignable or declarable. This may be due to encountering a previous error."))
 			return {}
 		else
 			out.constant_line = out.constant_line + 1

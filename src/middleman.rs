@@ -109,12 +109,26 @@ pub fn passthru(token_list: Vec<String>) -> LuaResult<()> {
     let parser = include_str!("../lua/parser.lua");
 
     // loaded modules
-    let pretty_mod: Table = lua.load(pretty).eval()?;
-    let globals_mod: Table = lua.load(m_globals).eval()?;
+    let globals_mod: Table = match lua.load(m_globals).eval() {
+        Ok(v) => v,
+        Err(e) => {
+            println!("globals error: {}", e);
+            return Ok(());
+        }
+    };
+    let pretty_mod: Table = match lua.load(pretty).eval() {
+        Ok(v) => v,
+        Err(e) => {
+            println!("globals error: {}", e);
+            return Ok(());
+        }
+    };
+
 
     // register modules
+    lua.register_module("globals", globals_mod)?; // register globals first - pretty.lua uses them.
     lua.register_module("pretty", pretty_mod)?;
-    lua.register_module("globals", globals_mod)?;
+
 
     // execute code
     lua.load(lexer).exec().expect("Failed to execute tokenizer.lua");
@@ -138,8 +152,8 @@ pub fn passthru(token_list: Vec<String>) -> LuaResult<()> {
 
     // display AST
     if let LuaValue::Table(table) = parse_result {
-        let mut iter = table.sequence_values::<LuaValue>();
-        let mut nodes = vec![];
+        let mut iter: LuaTableSequence<'_, LuaValue> = table.sequence_values::<LuaValue>();
+        let mut nodes: Vec<LuaValue> = vec![];
         while let Some(node) = iter.next() {
             nodes.push(node?);
         }

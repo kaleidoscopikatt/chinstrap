@@ -43,13 +43,34 @@ function out.pprint(t, ...)
     print(out.colString(t, ...))
 end
 
+function out.errorBlock(process, code, message)
+	local t = {
+		process=process,
+		code=code,
+		message=message,
+	}
+
+	setmetatable(t, {
+		__tostring = function(v)
+			print("{ process=".. v.process .. ", code=".. tostring(v.code).. ", message=".. v.message .." }")
+		end,
+	})
+
+	return t
+end
+
 function out.processPrint(processName, text, processCol)
 	if not processCol then processCol = "blue" end
 	print(out.colString("[".. processName:upper().. ("\\ln".. tostring(out.constant_line).. ":".. "tok".. tostring(out.constant_tok)) .. "]:", processCol).. " ".. text)
 end
 
-function out.errorPrint(processName, errorCode, text)
-	print(out.colString("[".. processName:upper().. ("\\ln".. tostring(out.constant_line).. ":".. "tok".. tostring(out.constant_tok)) .. "]:".. " Error Code ".. tostring(errorCode).. " - \"".. text .. "\"", "red_bg"))
+function out.errorPrint(errorBlock)
+	print(out.colString("[".. errorBlock.process:upper().. ("\\ln".. tostring(out.constant_line).. ":".. "tok".. tostring(out.constant_tok)) .. "]:".. " Error Code ".. tostring(errorBlock.code).. " - \"".. errorBlock.message .. "\"", "red_bg"))
+end
+
+function out.assert(condition, errorBlock)
+    if (not condition) then out.errorPrint(errorBlock) return false end
+	return true
 end
 
 return out
