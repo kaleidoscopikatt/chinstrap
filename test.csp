@@ -1,7 +1,8 @@
 sum = 10;
 sum = 10 + 10;
-sum = (10 + 10);
-sum = (10 + 10) * 12;
+sum = (10 + 10) * 12 + 4 * (88 - 80 - 3);
+sum = (10 + hello_world(50100)) * 12;
+n = hello_world(10 + 10, 100, "Hello, World!");
 
-myvar = "Hello, World!";
-myvar = myAwesomeFunction("hi");
+$ This is my comment
+myvar = "Hello, World!"; $ This is also my comment!

@@ -10,6 +10,8 @@ globals.enum_TokenTypes = {
     "Comment",
     "Whitespace",
     "Unknown",
+    "Boolean",
+    "Null",
 }
 
 globals.seperators = { ';',

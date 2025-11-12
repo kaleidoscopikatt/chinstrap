@@ -8,20 +8,26 @@ local globals = require("globals")
 local out = require("pretty")
 
 function RetrieveTokens(lines)
-    local tokenList = {}
+    local tokenList = globals.druggedTable({})
 
     local function finalizeToken(token)
         if token.contents ~= "" then
-            -- Match for keywords...
-            if token.type == globals.enum_TokenTypes.Enum("Identifier") and globals.tableFind(keywords, token.contents) then
-                token.type = globals.enum_TokenTypes.Enum("Keyword")
+            -- Match for keywords & booleans...
+            if token.type == globals.enum_TokenTypes.Enum("Identifier") then
+                if globals.tableFind(globals.keywords, token.contents) then
+                    token.type = globals.enum_TokenTypes.Enum("Keyword")
+                elseif globals.tableFind({'true', 'false'}, token.contents) then
+                    token.type = globals.enum_TokenTypes.Enum("Boolean")
+                elseif token.contents == 'null' then
+                    token.type = globals.enum_TokenTypes.Enum("Null")
+                end
             end
             table.insert(tokenList, token)
         end
     end
 
     local function newToken(contents, tokenType)
-        return { contents = contents or "", type = tokenType or globals.enum_TokenTypes.Enum("Unknown") }
+        return globals.druggedTable({ contents = contents or "", type = tokenType or globals.enum_TokenTypes.Enum("Unknown") })
     end
 
     local inString = false
@@ -65,10 +71,10 @@ function RetrieveTokens(lines)
 
                         -- We've reached a seperator, write this as a new token!
                         -- Parser should then process all from the previous seperator...
-                        currentToken = {
+                        currentToken = globals.druggedTable({
                             contents = char,
                             type = globals.enum_TokenTypes.Enum("Seperator")
-                        }
+                        })
 
                         -- Pop the seperator token.
                         finalizeToken(currentToken)
@@ -79,10 +85,10 @@ function RetrieveTokens(lines)
                         currentToken = newToken()
 
                         -- Pop the token currently being written
-                        currentToken = {
+                        currentToken = globals.druggedTable({
                             contents = char,
                             type = globals.enum_TokenTypes.Enum("Operator")
-                        }
+                        })
 
                         -- Pop the operator token.
                         finalizeToken(currentToken)
@@ -159,6 +165,7 @@ function RetrieveTokens(lines)
         i = i + 1
     end
 
+    --print("Sending off: ".. tostring(tokenList))
     return tokenList
 end
 
