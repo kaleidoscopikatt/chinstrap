@@ -274,61 +274,11 @@ function ParseExpression(cursor)
     return node
 end
 
-function ParseNumber(cursor)
-	-- local token = cursor:read()
-	-- --print(token.contents)
-
-	-- local contents = globals.druggedTable({})
-	-- local depth = 0
-	
-	-- for i, tok in TokenReader(cursor) do
-	-- 	if tok.contents == ';' then
-	-- 		break
-	-- 	end
-
-	-- 	if tok.contents == '(' then
-	-- 		depth = depth + 1
-	-- 		table.insert(contents, tok)
-	-- 		goto continue
-	-- 	end
-
-	-- 	if tok.contents == ')' or tok.contents == ',' then
-	-- 		if depth == 0 then
-	-- 			break
-	-- 		end
-
-	-- 		depth = depth - 1
-	-- 		table.insert(contents, tok)
-	-- 		goto continue
-	-- 	end
-
-	-- 	if (globals.tableFind({1, 2, 4, 5}, tok.type)) then
-	-- 		table.insert(contents, tok)
-	-- 	else
-	-- 		break
-	-- 	end
-
-	-- 	::continue::
-	-- end
-
-	-- local rpnStack = ParseLogic(contents)
-
-	-- if (rpnStack == -1) then
-	-- 	return -1
-	-- end
-
-	-- local ASTNode = RPNtoAST(rpnStack)
-
-	-- return ASTNode
-
-	return ParseExpression(cursor)
-end
-
 function ParseIdentifier(cursor)
 	local token = cursor:eat()
 
 	if globals.tableFind(quickMaths, token.contents) then
-		return ParseNumber(cursor)
+		return ParseExpression(cursor)
 	elseif cursor:read().contents == "(" then
 		-- It's a function!
 		cursor:regressCursor()
