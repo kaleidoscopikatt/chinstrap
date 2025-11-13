@@ -95,9 +95,11 @@ local Cursor = {
 local quickMaths = { "sin", "max", "sample", "pi", "cos", "tan", "sinh", "cosh", "tanh", "dot" }
 
 function Node(class, ...)
+	local children = { ... }
+
 	local node = globals.druggedTable({
 		class = class or "Root",
-		children = { ... },
+		children = children,
 
 		push = function(self, child)
 			table.insert(self.children, child)
@@ -197,19 +199,29 @@ function ParsePrimary(cursor)
         local isParen = cursor:test("(")
         if isParen then
 			local isNoParam = cursor:expect(")")
-			local params = {}
+			local params = globals.druggedTable({})
 
 			if not isNoParam then
-				for i, tok in TokenReader(cursor) do
-					if tok.contents == ')' then
-						break
-					end
-
+				repeat
 					table.insert(params, ParseExpression(cursor))
-				end
+				until cursor:expect(")")
 			end
 
-            return Node("FunctionCall", name, table.unpack(params))
+			local rBracketTest, rBracketGot = cursor:expect(")")
+			if (not rBracketTest) then
+				out.errorPrint(out.errorBlock("parser", 16, "Expected ')', got ".. tostring(rBracketGot.contents)))
+				return -1
+			end
+			cursor:progressCursor()
+
+			local node = nil
+			if #params > 0 then
+				node = Node("FunctionCall", name, table.unpack(params))
+			else
+				node = Node("FunctionCall", name)
+			end
+
+            return node
         end
 
         return Node("Variable", name)
@@ -219,15 +231,18 @@ function ParsePrimary(cursor)
     if tok.contents == "(" then
         cursor:progressCursor()
         local expr = ParseExpression(cursor)
-        if not cursor:read() or cursor:read().contents ~= ")" then
-            out.errorPrint(out.errorBlock("parser", 16, "Expected ')', got ".. tostring(cursor:read().contents)))
-        end
+		if not expr.class == "FunctionCall" then
+			if not cursor:read() or cursor:read().contents ~= ")" then
+				out.errorPrint(out.errorBlock("parser", 16, "Expected ')', got ".. tostring(cursor:read().contents)))
+			end
+		end
         cursor:progressCursor()
         return expr
     end
 
-	if tok.contents == "," then
-		return Node("PracticalWhitespace", tok)
+	if tok.type == 5 then
+		cursor:progressCursor()
+		return Node("Seperator", tok)
 	end
 
     out.errorPrint(out.errorBlock("parser", 0, "Invalid Primary: ".. tostring(cursor:read().contents)))
@@ -437,204 +452,204 @@ function ParseTokens(tokenList)
 	return motherStack
 end
 
-ParseTokens({
-  [1] =     {
-      contents = "sum",
-      type = 1,
-    },
-  [2] =     {
-      contents = "=",
-      type = 2,
-    },
-  [3] =     {
-      contents = "10",
-      type = 4,
-    },
-  [4] =     {
-      contents = ";",
-      type = 5,
-    },
-  [5] =     {
-      contents = "",
-      type = 7,
-    },
-  [6] =     {
-      contents = "sum",
-      type = 1,
-    },
-  [7] =     {
-      contents = "=",
-      type = 2,
-    },
-  [8] =     {
-      contents = "10",
-      type = 4,
-    },
-  [9] =     {
-      contents = "+",
-      type = 2,
-    },
-  [10] =     {
-      contents = "10",
-      type = 4,
-    },
-  [11] =     {
-      contents = ";",
-      type = 5,
-    },
-  [12] =     {
-      contents = "",
-      type = 7,
-    },
-  [13] =     {
-      contents = "sum",
-      type = 1,
-    },
-  [14] =     {
-      contents = "=",
-      type = 2,
-    },
-  [15] =     {
-      contents = "(",
-      type = 5,
-    },
-  [16] =     {
-      contents = "10",
-      type = 4,
-    },
-  [17] =     {
-      contents = "+",
-      type = 2,
-    },
-  [18] =     {
-      contents = "10",
-      type = 4,
-    },
-  [19] =     {
-      contents = ")",
-      type = 5,
-    },
-  [20] =     {
-      contents = ";",
-      type = 5,
-    },
-  [21] =     {
-      contents = "",
-      type = 7,
-    },
-  [22] =     {
-      contents = "sum",
-      type = 1,
-    },
-  [23] =     {
-      contents = "=",
-      type = 2,
-    },
-  [24] =     {
-      contents = "(",
-      type = 5,
-    },
-  [25] =     {
-      contents = "10",
-      type = 4,
-    },
-  [26] =     {
-      contents = "+",
-      type = 2,
-    },
-  [27] =     {
-      contents = "10",
-      type = 4,
-    },
-  [28] =     {
-      contents = ")",
-      type = 5,
-    },
-  [29] =     {
-      contents = "*",
-      type = 2,
-    },
-  [30] =     {
-      contents = "12",
-      type = 4,
-    },
-  [31] =     {
-      contents = ";",
-      type = 5,
-    },
-  [32] =     {
-      contents = "",
-      type = 7,
-    },
-  [33] =     {
-      contents = "",
-      type = 7,
-    },
-  [34] =     {
-      contents = "my_other_thing",
-      type = 1,
-    },
-  [35] =     {
-      contents = "=",
-      type = 2,
-    },
-  [36] =     {
-      contents = "hello_world",
-      type = 1,
-    },
-  [37] =     {
-      contents = "(",
-      type = 5,
-    },
-  [38] =     {
-      contents = ")",
-      type = 5,
-    },
-  [39] =     {
-      contents = ";",
-      type = 5,
-    },
-  [40] =     {
-      contents = "",
-      type = 7,
-    },
-  [41] =     {
-      contents = "",
-      type = 7,
-    },
-  [42] =     {
-      contents = "$ This is my comment",
-      type = 6,
-    },
-  [43] =     {
-      contents = "",
-      type = 7,
-    },
-  [44] =     {
-      contents = "myvar",
-      type = 1,
-    },
-  [45] =     {
-      contents = "=",
-      type = 2,
-    },
-  [46] =     {
-      contents = "\"Hello, World!\"",
-      type = 3,
-    },
-  [47] =     {
-      contents = ";",
-      type = 5,
-    },
-  [48] =     {
-      contents = "$ This is also my comment!",
-      type = 6,
-    },
-  [49] =     {
-      contents = "",
-      type = 7,
-    },
-})
+-- ParseTokens({
+--   [1] =     {
+--       contents = "sum",
+--       type = 1,
+--     },
+--   [2] =     {
+--       contents = "=",
+--       type = 2,
+--     },
+--   [3] =     {
+--       contents = "10",
+--       type = 4,
+--     },
+--   [4] =     {
+--       contents = ";",
+--       type = 5,
+--     },
+--   [5] =     {
+--       contents = "",
+--       type = 7,
+--     },
+--   [6] =     {
+--       contents = "sum",
+--       type = 1,
+--     },
+--   [7] =     {
+--       contents = "=",
+--       type = 2,
+--     },
+--   [8] =     {
+--       contents = "10",
+--       type = 4,
+--     },
+--   [9] =     {
+--       contents = "+",
+--       type = 2,
+--     },
+--   [10] =     {
+--       contents = "10",
+--       type = 4,
+--     },
+--   [11] =     {
+--       contents = ";",
+--       type = 5,
+--     },
+--   [12] =     {
+--       contents = "",
+--       type = 7,
+--     },
+--   [13] =     {
+--       contents = "sum",
+--       type = 1,
+--     },
+--   [14] =     {
+--       contents = "=",
+--       type = 2,
+--     },
+--   [15] =     {
+--       contents = "(",
+--       type = 5,
+--     },
+--   [16] =     {
+--       contents = "10",
+--       type = 4,
+--     },
+--   [17] =     {
+--       contents = "+",
+--       type = 2,
+--     },
+--   [18] =     {
+--       contents = "10",
+--       type = 4,
+--     },
+--   [19] =     {
+--       contents = ")",
+--       type = 5,
+--     },
+--   [20] =     {
+--       contents = ";",
+--       type = 5,
+--     },
+--   [21] =     {
+--       contents = "",
+--       type = 7,
+--     },
+--   [22] =     {
+--       contents = "sum",
+--       type = 1,
+--     },
+--   [23] =     {
+--       contents = "=",
+--       type = 2,
+--     },
+--   [24] =     {
+--       contents = "(",
+--       type = 5,
+--     },
+--   [25] =     {
+--       contents = "10",
+--       type = 4,
+--     },
+--   [26] =     {
+--       contents = "+",
+--       type = 2,
+--     },
+--   [27] =     {
+--       contents = "10",
+--       type = 4,
+--     },
+--   [28] =     {
+--       contents = ")",
+--       type = 5,
+--     },
+--   [29] =     {
+--       contents = "*",
+--       type = 2,
+--     },
+--   [30] =     {
+--       contents = "12",
+--       type = 4,
+--     },
+--   [31] =     {
+--       contents = ";",
+--       type = 5,
+--     },
+--   [32] =     {
+--       contents = "",
+--       type = 7,
+--     },
+--   [33] =     {
+--       contents = "",
+--       type = 7,
+--     },
+--   [34] =     {
+--       contents = "my_other_thing",
+--       type = 1,
+--     },
+--   [35] =     {
+--       contents = "=",
+--       type = 2,
+--     },
+--   [36] =     {
+--       contents = "hello_world",
+--       type = 1,
+--     },
+--   [37] =     {
+--       contents = "(",
+--       type = 5,
+--     },
+--   [38] =     {
+--       contents = ")",
+--       type = 5,
+--     },
+--   [39] =     {
+--       contents = ";",
+--       type = 5,
+--     },
+--   [40] =     {
+--       contents = "",
+--       type = 7,
+--     },
+--   [41] =     {
+--       contents = "",
+--       type = 7,
+--     },
+--   [42] =     {
+--       contents = "$ This is my comment",
+--       type = 6,
+--     },
+--   [43] =     {
+--       contents = "",
+--       type = 7,
+--     },
+--   [44] =     {
+--       contents = "myvar",
+--       type = 1,
+--     },
+--   [45] =     {
+--       contents = "=",
+--       type = 2,
+--     },
+--   [46] =     {
+--       contents = "\"Hello, World!\"",
+--       type = 3,
+--     },
+--   [47] =     {
+--       contents = ";",
+--       type = 5,
+--     },
+--   [48] =     {
+--       contents = "$ This is also my comment!",
+--       type = 6,
+--     },
+--   [49] =     {
+--       contents = "",
+--       type = 7,
+--     },
+-- })
 
 -- print(globals.tableToString(ParseTokens({
 --   [1] =     {
