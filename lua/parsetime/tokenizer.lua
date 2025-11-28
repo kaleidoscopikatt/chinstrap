@@ -7,6 +7,11 @@
 local globals = require("globals")
 local out = require("pretty")
 
+--[[
+    @name: RetrieveTokens(lines)
+    @desc: Gets a list of strings and splits them all up into
+           individual tokens to be parsed later.
+]]
 function RetrieveTokens(lines)
     local tokenList = globals.druggedTable({})
 

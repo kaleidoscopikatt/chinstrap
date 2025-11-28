@@ -1,3 +1,8 @@
+--[[
+    @name: globals.lua
+    @desc: Contains a list of global properties and functions, which may be helpers.
+]]
+
 local globals = {}
 
 globals.enum_TokenTypes = {
@@ -31,6 +36,10 @@ globals.keywords = {
     "if", "while", "return", "continue", "else", "elseif", "fn", "@property", "@uniform"
 }
 
+--[[
+    @name: globals.enum_TokenTypes.Enum(name)
+    @desc: Returns the index of the given Enum type.
+]]
 globals.enum_TokenTypes["Enum"] = function(name)
     for index, value in ipairs(globals.enum_TokenTypes) do
         if index ~= "Enum" then
@@ -43,6 +52,11 @@ globals.enum_TokenTypes["Enum"] = function(name)
     return -1
 end
 
+--[[
+    @name: globals.tableFind(t, v)
+    @desc: Returns whether the given object (v) can be found in the
+           given table (t)
+]]
 globals.tableFind = function(t, v)
     if t == nil then return false end -- TODO: Unknown looping over nil value found when migrating to <globals.lua> - functions as expected.
     for _, tV in ipairs(t) do
@@ -54,6 +68,10 @@ globals.tableFind = function(t, v)
     return false
 end
 
+--[[
+    @name: globals.tableToString(t)
+    @desc: Returns a string representation of the table's data.
+]]
 globals.tableToString = function(t, indent)
     indent = indent or 0
 	local toprint = string.rep(" ", indent) .. "{\n"
@@ -77,6 +95,12 @@ globals.tableToString = function(t, indent)
 	return toprint
 end
 
+--[[
+    @name: globals.druggedTable(template)
+    @desc: Creates a "druggedTable" variant of the given table,
+           which means it uses globals.tableToString() when parsed through
+           tostring(obj).
+]]
 globals.druggedTable = function(template)
     local t = template
     setmetatable(t, {

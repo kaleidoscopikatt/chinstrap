@@ -1,3 +1,9 @@
+--[[
+	@name: pretty.lua
+	@desc: Helper module for printing pretty things to the
+		   output.
+]]
+
 local out = {}
 
 out.constant_line = 1
@@ -23,6 +29,10 @@ out.codes = {
     ["END"] = "0",
 }
 
+--[[
+	@name: out.colString(t, ...)
+	@desc: Returns a string in the given colour scheme.
+]]
 function out.colString(t, ...)
 	local cols = { ... }
 	local str = ''
@@ -39,10 +49,22 @@ function out.colString(t, ...)
 	return "\27[".. str.. t.. "\27[".. out.codes["END"].. "m"
 end
 
+--[[
+	@name: out.pprint(t, ...)
+	@desc: Pretty-prints... prints output with colour scheme.
+]]
 function out.pprint(t, ...)
     print(out.colString(t, ...))
 end
 
+--[[
+	@name: out.errorBlock(process, code, message)
+	@desc: Defines an error block, to be used later.
+
+	@prop: process
+	@prop: code
+	@prop: message
+]]
 function out.errorBlock(process, code, message)
 	local t = {
 		process=process,
@@ -59,15 +81,30 @@ function out.errorBlock(process, code, message)
 	return t
 end
 
+--[[
+	@name: out.processPrint(processName, text, processCol)
+	@desc: Pretty prints out in a specific format to give more info to the dev.
+]]
 function out.processPrint(processName, text, processCol)
 	if not processCol then processCol = "blue" end
 	print(out.colString("[".. processName:upper().. ("\\ln".. tostring(out.constant_line).. ":".. "tok".. tostring(out.constant_tok)) .. "]:", processCol).. " ".. text)
 end
 
+
+--[[
+	@name: out.errorPrint(errorBlock)
+	@desc: Pretty prints out the errorBlock in the proper error format to give more
+		   info to the dev.
+]]
 function out.errorPrint(errorBlock)
 	print(out.colString("[".. errorBlock.process:upper().. ("\\ln".. tostring(out.constant_line).. ":".. "tok".. tostring(out.constant_tok)) .. "]:".. " Error Code ".. tostring(errorBlock.code).. " - \"".. errorBlock.message .. "\"", "red_bg"))
 end
 
+--[[
+	@name: out.assert(condition, errorBlock)
+	@desc: Will call errorPrint if the condition is not true, and returns the
+		   result of the condition to be used inline with if statements.
+]]
 function out.assert(condition, errorBlock)
     if (not condition) then out.errorPrint(errorBlock) return false end
 	return true
