@@ -8,8 +8,10 @@
 use crate::ioreader::*;
 use mlua::prelude::*;
 use mlua::{Table, Result as LuaResult};
+use std::fmt::Result;
 use std::fs;
 use std::path::PathBuf;
+use std::ptr::null;
 
 const RESET: &str = "\x1b[0m";
 const CYAN: &str = "\x1b[36m";
@@ -93,37 +95,22 @@ fn print_loaded(text: &str) {
     println!("{}╰{}╯{}", GREEN, "─".repeat(width), RESET);
 }
 
-pub fn passthru(token_list: Vec<String>) -> LuaResult<()> {
-    let lua = Lua::new();
-
+pub fn passthru(lua: &Lua, token_list: Vec<String>) -> LuaResult<Option<LuaValue>> {
     //let (lexer, parser) = load_lua_files();
 
     /* include_str!() means the lua code gets compiled with the .exe! */
     
     // modules
-    let pretty = include_str!("../lua/pretty.lua");
-    let m_globals = include_str!("../lua/globals.lua");
+    let pretty = include_str!("../lua/parsetime/helpers/pretty.lua");
+    let m_globals = include_str!("../lua/parsetime/helpers/globals.lua");
 
     // code
-    let lexer = include_str!("../lua/tokenizer.lua");
-    let parser = include_str!("../lua/parser.lua");
+    let lexer = include_str!("../lua/parsetime/tokenizer.lua");
+    let parser = include_str!("../lua/parsetime/parser.lua");
 
     // loaded modules
-    let globals_mod: Table = match lua.load(m_globals).eval() {
-        Ok(v) => v,
-        Err(e) => {
-            println!("globals error: {}", e);
-            return Ok(());
-        }
-    };
-    let pretty_mod: Table = match lua.load(pretty).eval() {
-        Ok(v) => v,
-        Err(e) => {
-            println!("globals error: {}", e);
-            return Ok(());
-        }
-    };
-
+    let globals_mod: Table = lua.load(m_globals).eval()?;
+    let pretty_mod: Table = lua.load(pretty).eval()?;
 
     // register modules
     lua.register_module("globals", globals_mod)?; // register globals first - pretty.lua uses them.
@@ -151,7 +138,7 @@ pub fn passthru(token_list: Vec<String>) -> LuaResult<()> {
     println!("");
 
     // display AST
-    if let LuaValue::Table(table) = parse_result {
+    if let LuaValue::Table(ref table) = parse_result {
         let mut iter: LuaTableSequence<'_, LuaValue> = table.sequence_values::<LuaValue>();
         let mut nodes: Vec<LuaValue> = vec![];
         while let Some(node) = iter.next() {
@@ -164,6 +151,22 @@ pub fn passthru(token_list: Vec<String>) -> LuaResult<()> {
         }
     }
 
-    // i still hate this no-return method, but i'll probably maybe get used to it.
-    Ok(())
+    Ok(Some(parse_result))
+}
+
+pub fn warpToTable(res: Option<LuaValue>) -> Option<Table> {
+    match res {
+        Some(v) => {
+            if let LuaValue::Table(table) = v {
+                Some(table)
+            } else {
+                eprintln!("Cannot cast Option<LuaResult> to Table!");
+                None
+            }
+        },
+        None => {
+            eprintln!("Cannot cast LuaResult to Table!");
+            None
+        }
+    }
 }

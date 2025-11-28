@@ -10,6 +10,20 @@ use std::io::prelude::*;
 use std::fs::File;
 use std::path::Path;
 
+pub struct config {
+    pub isOpenGL: bool,
+    pub otherFlags: Vec<String>,
+}
+
+pub fn getConfig(args: Vec<String>) -> config {
+    let default = config {
+        isOpenGL: false,
+        otherFlags: vec![],
+    };
+
+    default
+}
+
 pub fn get_source(file_path: &String) -> io::Result<Vec<String>>
 {
     let file = File::open(file_path)?;

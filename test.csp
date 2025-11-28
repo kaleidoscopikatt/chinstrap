@@ -1,8 +1,13 @@
-sum = 10;
-sum = 10 + 10;
-sum = (10 + 10) * 12 + 4 * (88 - 80 - 3);
-sum = (10 + hello_world(10 / 24 * 12)) * 12;
-n = hello_world(10 + 10, (100 * 12) / 4, "Hello, World!");
+$ sum = 10;
+$ sum = 10 + 10;
+$ sum = (10 + 10) * 12 + 4 * (88 - 80 - 3);
+$ sum = (10 + hello_world(10 / 24 * 12)) * 12;
+$ n = hello_world(10 + 10, (sum * -12 - 14) / 4, "Hello, World!");
+
+$ my_thing = !true;
 
 $ This is my comment
-myvar = "Hello, World!"; $ This is also my comment!
+$ myvar = "Hello, World!"; $ This is also my comment!
+
+b = -((1 + 1) * 4 + spock(10, a, b()));
+a = 10;
