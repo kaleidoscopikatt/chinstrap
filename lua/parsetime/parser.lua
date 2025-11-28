@@ -4,9 +4,32 @@
 processes them into an Abstract Syntax Tree.
 ]]--
 
+
+-- Imports
 local globals = require("...\\lua\\parsetime\\helpers\\globals")
 local out = require("...\\lua\\parsetime\\helpers\\pretty")
 
+-- Classes
+
+--[[
+	@name: Cursor
+	@desc: Class for progressing through tokens in a list.
+
+
+	@func: new(source)
+
+	@func: read(self, lookahead)
+	@func: setId(self, n)
+
+	@func: progressCursor(self) - !CONSUME
+	@func: regressCursor(self) - !CONSUME
+
+	@func: eat(self) - CONSUME
+	@func: expect(self, t) - !CONSUME
+	@func: test(self, t) - CONSUME
+
+	@func: liquidate(self)
+]]
 local Cursor = {
 	new = function(source)
 		local newCursor = {
@@ -92,8 +115,15 @@ local Cursor = {
 	end
 }
 
-local quickMaths = { "sin", "max", "sample", "pi", "cos", "tan", "sinh", "cosh", "tanh", "dot" }
+--[[
+	@name: Node(class, ...)
+	@desc: Class for defining a Node in the AST.
 
+	@prop: class : @def("Root")
+	@prop: children
+
+	@func: push(self, child)
+]]
 function Node(class, ...)
 	local children = { ... }
 
@@ -109,6 +139,13 @@ function Node(class, ...)
 	return node
 end
 
+-- Helpers
+local inbuilts = { "sin", "max", "sample", "pi", "cos", "tan", "sinh", "cosh", "tanh", "dot" }
+
+--[[
+	@name: Declare(obj, condition, err)
+	@desc: Asserts that a condition must be true, returning an object, else giving a provided error.
+]]
 function Declare(obj, condition, err)
 	if condition then
 		return obj
@@ -118,6 +155,10 @@ function Declare(obj, condition, err)
 	end
 end
 
+--[[
+	@name: IReader(t)
+	@desc: Use in a for loop to progress through tokens without a cursor...
+]]
 function IReader(t)
 	local i = 0
 	local n = #t
@@ -132,6 +173,11 @@ function IReader(t)
 	end
 end
 
+--[[
+	@name: TokenReader(cursor)
+	@desc: Use in a for loop to progress through tokens, updating a given cursor
+		   each time.
+]]
 function TokenReader(cursor)
 	cursor:regressCursor()
 	return function()
@@ -142,47 +188,20 @@ function TokenReader(cursor)
 	end
 end
 
+--[[
+	@name: Is(object, value)
+	@desc: Returns whether the object, presumed a Node, has the contents
+		   of value.
+]]
 function Is(object, value)
 	return object.contents == value
 end
 
-function RPNtoAST(tokens)
-	--print("RPN:", globals.tableToString(tokens))
-	local stack = {}
+-- Recursive Descent - Functions
 
-	for i, token in ipairs(tokens) do
-		local t = token.contents or token
-		--print(i, token.contents, token.type)
-		
-		if tonumber(t) then
-			--print("Pushing:", t)
-			table.insert(stack, Node("Number", token))
-		elseif t:match("^[%a_]+$") then -- RegEx sucks man
-			--print("Pushing:", t)
-			table.insert(stack, Node("Variable", token))
-		elseif t == "+" or t == "-" or t == "*" or t == "/" or t == "^" then
-			local right = table.remove(stack)
-			local left = table.remove(stack)
-
-			table.insert(stack, Node("Operator", token, left, right))
-		else
-			error("Error code 1: Unknown token [" .. tostring(t).. "]")
-		end
-	end
-
-	if #stack ~= 1 then
-		print("BAD RPN:", globals.tableToString(tokens))
-		print("STACK:", globals.tableToString(stack))
-	end
-	assert(#stack == 1, "Error code 2: Malformed RPN Expression")
-	return stack[1]
-end
-
-------------------------------
----   EXPRESSION PARSING    --
-------------------------------
---- Testing out trying to do Recursive Descent parsing...
-
+--[[
+	@name: ParsePrimary(cursor)
+]]
 function ParsePrimary(cursor)
     local tok = cursor:read()
     if not tok then error("EOF in primary") end
@@ -213,8 +232,6 @@ function ParsePrimary(cursor)
 
     -- identifier or function call
 	
-	--out.processPrint("parser", "tok type: ".. tostring(tok.type))
-	--out.processPrint("parser", "tok contents: ".. tostring(tok.contents))
     if tok.type == globals.enum_TokenTypes.Enum("Identifier") then
         local name = cursor:eat()
         local isParen = cursor:test("(")
@@ -273,6 +290,10 @@ function ParsePrimary(cursor)
     out.errorPrint(out.errorBlock("parser", 0, "Invalid Primary: ".. tostring(cursor:read().contents)))
 end
 
+--[[
+	@name: ParseUnary(cursor)
+	@desc: Parses Unary expressions, (e.g. ! and -)
+]]
 function ParseUnary(cursor)
 	local tok = cursor:read()
 	if tok and (tok.contents == "!" or tok.contents == "-") then
@@ -295,6 +316,10 @@ function ParseUnary(cursor)
 	end
 end
 
+--[[
+	@name: ParseFactor(cursor)
+	@desc: Parses a^b
+]]
 function ParseFactor(cursor)
     local left = ParseUnary(cursor)
     local nextTok = cursor:read()
@@ -306,6 +331,10 @@ function ParseFactor(cursor)
     return left
 end
 
+--[[
+	@name: ParseTerm(cursor)
+	@desc: Parses multiplication & division
+]]
 function ParseTerm(cursor)
     local node = ParseFactor(cursor)
     while true do
@@ -321,6 +350,9 @@ function ParseTerm(cursor)
     return node
 end
 
+--[[
+	@name: ParseExpression(cursor)
+]]
 function ParseExpression(cursor)
     local node = ParseTerm(cursor)
     while true do
@@ -336,10 +368,13 @@ function ParseExpression(cursor)
     return node
 end
 
+--[[
+	@name: ParseIdentifier(cursor)
+]]
 function ParseIdentifier(cursor)
 	local token = cursor:eat()
 
-	if globals.tableFind(quickMaths, token.contents) then
+	if globals.tableFind(inbuilts, token.contents) then
 		return ParseExpression(cursor)
 	elseif cursor:read().contents == "(" then
 		-- It's a function!
@@ -354,6 +389,11 @@ function ParseIdentifier(cursor)
 	return false
 end
 
+-- Syntax Definitions
+
+--[[
+	@name: ParseAssignment(tokenList)
+]]
 function ParseAssignment(tokenList)
 	local cursor = Cursor.new(tokenList)
 	local lhs = cursor:eat()
@@ -387,6 +427,10 @@ function ParseAssignment(tokenList)
 	return node
 end
 
+--[[
+	@name: ParseProperty(tokenList)
+	@desc: Parses Property blocks (e.g. @Property("MainTex", Tex2D))
+]]
 function ParseProperty(tokenList)
 	local cursor = Cursor.new(tokenList)
 	local firstCheck = cursor:test("@property")
@@ -415,8 +459,8 @@ function ParseProperty(tokenList)
 	if not rhs.type == 1 then
 		return -1
 	end
-	if not globals.tableFind({"2D", "3D"}, rhs.contents) then
-		out.errorPrint(out.errorBlock("parser", 6, "Expected '2D' or '3D', got '".. rhs.contents.. "'!"))
+	if not globals.tableFind({"Tex2D", "Tex3D"}, rhs.contents) then
+		out.errorPrint(out.errorBlock("parser", 6, "Expected 'Tex2D' or 'Tex3D', got '".. rhs.contents.. "'!"))
 		return -1
 	end
 	local rBracketTest, rBracketGot = cursor:test(")")
@@ -433,10 +477,13 @@ function ParseProperty(tokenList)
 	return Node("Property", Node("String", lhs), Node("Identifier", rhs))
 end
 
-function ParseFunctionCall(tokenList)
-	local cursor = Cursor.new(tokenList)
-end
+-- Main 
 
+--[[
+	@name: ParseTokens(tokenList)
+	@desc: Called by the middleman.rs via ::passthru after being tokenized,
+		   returns the AST of the Chinstrap code.
+]]
 function ParseTokens(tokenList)
 	print("") -- cool break in printing
 	local motherStack = globals.druggedTable({})
@@ -468,7 +515,6 @@ function ParseTokens(tokenList)
 	for i, line in ipairs(motherStack) do
 		local assignmentNode = ParseAssignment(line)
 		local propertyNode = ParseProperty(line)
-		--local callNode = ParseFunctionCall(line)
 
 		local breakup = false -- Because goto didn't want to work, for whatever reason...
 
@@ -494,11 +540,6 @@ function ParseTokens(tokenList)
 		panicCursor = nil
 		collectgarbage()
 
-		--if (isValidNode(callNode)) then
-		--	breakup = true
-		--	motherStack[i] = callNode
-		--end
-
 		if (not breakup) then
 			out.errorPrint(out.errorBlock("parser", 2, "Statement is not assignable or declarable. This may be due to encountering a previous error."))
 			-- out.errorPrint(out.errorBlock("parser", 27, "Stunted AST: ".. tostring(motherStack)))
@@ -511,237 +552,3 @@ function ParseTokens(tokenList)
 	print(out.colString("[PARSER]:", "blue").. " " .. out.colString("AST Generation Done!", "green_bg", "bold"))
 	return motherStack
 end
-
--- ParseTokens({
---   [1] =     {
---       contents = "sum",
---       type = 1,
---     },
---   [2] =     {
---       contents = "=",
---       type = 2,
---     },
---   [3] =     {
---       contents = "10",
---       type = 4,
---     },
---   [4] =     {
---       contents = ";",
---       type = 5,
---     },
---   [5] =     {
---       contents = "",
---       type = 7,
---     },
---   [6] =     {
---       contents = "sum",
---       type = 1,
---     },
---   [7] =     {
---       contents = "=",
---       type = 2,
---     },
---   [8] =     {
---       contents = "10",
---       type = 4,
---     },
---   [9] =     {
---       contents = "+",
---       type = 2,
---     },
---   [10] =     {
---       contents = "10",
---       type = 4,
---     },
---   [11] =     {
---       contents = ";",
---       type = 5,
---     },
---   [12] =     {
---       contents = "",
---       type = 7,
---     },
---   [13] =     {
---       contents = "sum",
---       type = 1,
---     },
---   [14] =     {
---       contents = "=",
---       type = 2,
---     },
---   [15] =     {
---       contents = "(",
---       type = 5,
---     },
---   [16] =     {
---       contents = "10",
---       type = 4,
---     },
---   [17] =     {
---       contents = "+",
---       type = 2,
---     },
---   [18] =     {
---       contents = "10",
---       type = 4,
---     },
---   [19] =     {
---       contents = ")",
---       type = 5,
---     },
---   [20] =     {
---       contents = ";",
---       type = 5,
---     },
---   [21] =     {
---       contents = "",
---       type = 7,
---     },
---   [22] =     {
---       contents = "sum",
---       type = 1,
---     },
---   [23] =     {
---       contents = "=",
---       type = 2,
---     },
---   [24] =     {
---       contents = "(",
---       type = 5,
---     },
---   [25] =     {
---       contents = "10",
---       type = 4,
---     },
---   [26] =     {
---       contents = "+",
---       type = 2,
---     },
---   [27] =     {
---       contents = "10",
---       type = 4,
---     },
---   [28] =     {
---       contents = ")",
---       type = 5,
---     },
---   [29] =     {
---       contents = "*",
---       type = 2,
---     },
---   [30] =     {
---       contents = "12",
---       type = 4,
---     },
---   [31] =     {
---       contents = ";",
---       type = 5,
---     },
---   [32] =     {
---       contents = "",
---       type = 7,
---     },
---   [33] =     {
---       contents = "",
---       type = 7,
---     },
---   [34] =     {
---       contents = "my_other_thing",
---       type = 1,
---     },
---   [35] =     {
---       contents = "=",
---       type = 2,
---     },
---   [36] =     {
---       contents = "hello_world",
---       type = 1,
---     },
---   [37] =     {
---       contents = "(",
---       type = 5,
---     },
---   [38] =     {
---       contents = ")",
---       type = 5,
---     },
---   [39] =     {
---       contents = ";",
---       type = 5,
---     },
---   [40] =     {
---       contents = "",
---       type = 7,
---     },
---   [41] =     {
---       contents = "",
---       type = 7,
---     },
---   [42] =     {
---       contents = "$ This is my comment",
---       type = 6,
---     },
---   [43] =     {
---       contents = "",
---       type = 7,
---     },
---   [44] =     {
---       contents = "myvar",
---       type = 1,
---     },
---   [45] =     {
---       contents = "=",
---       type = 2,
---     },
---   [46] =     {
---       contents = "\"Hello, World!\"",
---       type = 3,
---     },
---   [47] =     {
---       contents = ";",
---       type = 5,
---     },
---   [48] =     {
---       contents = "$ This is also my comment!",
---       type = 6,
---     },
---   [49] =     {
---       contents = "",
---       type = 7,
---     },
--- })
-
--- print(globals.tableToString(ParseTokens({
---   [1] =     {
---       contents = "@property",
---       type = 1,
---     },
---   [2] =     {
---       contents = "(",
---       type = 5,
---     },
---   [3] =     {
---       contents = "\"_MainTex\"",
---       type = 3,
---     },
---   [4] =     {
---       contents = ",",
---       type = 5,
---     },
---   [5] =     {
---       contents = "2D",
---       type = 1,
---     },
---   [6] =     {
---       contents = ")",
---       type = 5,
---     },
---   [7] =     {
---       contents = ";",
---       type = 5,
---     },
---   [8] =     {
---       contents = "",
---       type = 7,
---     },
--- })))
