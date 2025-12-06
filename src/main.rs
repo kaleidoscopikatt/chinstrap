@@ -70,7 +70,7 @@ fn main() {
     }
 
     args.remove(0);
-    let cnfg: config = getConfig(args);
+    let cnfg: Config = get_config(args, file_path);
     let ast: mlua::Table = match ast_result {
         Ok(opt) => match warpToTable(opt) {
             Some(table) => table,
@@ -85,5 +85,5 @@ fn main() {
         }
     };
     
-    compiler::compile(&lua, ast, cnfg);
+    compiler::compile(cwd.as_str(), &lua, ast, &cnfg);
 }
